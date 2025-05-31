@@ -7,7 +7,7 @@ import './App.css'; // グローバルなスタイルシート
 // publicフォルダにこのパスで画像を配置してください。
 const FIXED_FRAME_IMAGE = {
   id: 'fixed_round_frame',
-  src: '/frame.PNG', // 例: public/frames/fixed_round_frame.png
+  src: '/frame.png', // 例: public/frames/fixed_round_frame.png
   name: '固定の丸枠',
 };
 
