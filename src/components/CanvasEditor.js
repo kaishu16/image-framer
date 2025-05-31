@@ -4,10 +4,10 @@ import './CanvasEditor.css';
 const CanvasEditor = ({
   userImage,
   frameImageSrc,
-  initialCanvasWidth = 800,
-  initialCanvasHeight = 800,
+  initialCanvasSize = 500, // ← 幅・高さ共通
 }) => {
   const canvasRef = useRef(null);
+  const [canvasSize, setCanvasSize] = useState(initialCanvasSize);
   const [imageParams, setImageParams] = useState({ x: 0, y: 0, scale: 1 });
   const initialParamsRef = useRef(null);
   const touchState = useRef({
@@ -19,27 +19,43 @@ const CanvasEditor = ({
     pinchStartCenter: null,
   });
 
-  // 画像アップロード時・リサイズ時に初期化
+  // 親要素や画面幅に応じて正方形サイズを決定
+  useEffect(() => {
+    const handleResize = () => {
+      const parent = canvasRef.current?.parentElement;
+      const size = Math.min(
+        parent ? parent.clientWidth : initialCanvasSize,
+        window.innerWidth,
+        initialCanvasSize
+      );
+      setCanvasSize(size);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, [initialCanvasSize]);
+
+  const MAX_CANVAS_SIZE = 500; // 最大800px
+
   const setInitialParams = () => {
     const canvas = canvasRef.current;
     if (!canvas || !userImage) return;
-
+  
     // 画像の解像度を基準にcanvasのピクセルサイズを決定
-    const maxCanvasSize = 2000; // 最大2000pxまで拡大（必要に応じて調整）
-    const scaleW = userImage.width > maxCanvasSize ? maxCanvasSize / userImage.width : 1;
-    const scaleH = userImage.height > maxCanvasSize ? maxCanvasSize / userImage.height : 1;
+    const scaleW = userImage.width > MAX_CANVAS_SIZE ? MAX_CANVAS_SIZE / userImage.width : 1;
+    const scaleH = userImage.height > MAX_CANVAS_SIZE ? MAX_CANVAS_SIZE / userImage.height : 1;
     const scale = Math.min(scaleW, scaleH);
-
+  
     const canvasW = Math.round(userImage.width * scale);
     const canvasH = Math.round(userImage.height * scale);
-
+  
     canvas.width = canvasW;
     canvas.height = canvasH;
-
+  
     // 表示サイズは親要素や画面幅にフィット
     canvas.style.width = '100%';
     canvas.style.height = 'auto';
-
+  
     // 画像を中央＆フィット
     const fitScale = Math.min(
       (canvasW - 40) / userImage.width,
@@ -51,6 +67,7 @@ const CanvasEditor = ({
     initialParamsRef.current = params;
     setImageParams(params);
   };
+
   // 画像アップロード時
   useEffect(() => {
     setTimeout(setInitialParams, 0);
@@ -187,12 +204,12 @@ const CanvasEditor = ({
     <div className="canvas-editor-container">
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: 'auto', touchAction: 'none', background: '#fff', borderRadius: '16px' }}
+        style={{ width: '100%', height: 'auto', aspectRatio: '1 / 1', touchAction: 'none', background: '#fff', borderRadius: '16px' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        width={initialCanvasWidth}
-        height={initialCanvasHeight}
+        width={canvasSize}
+        height={canvasSize}
       />
       <div className="canvas-controls">
         <button onClick={handleSaveImage}>画像を保存</button>
