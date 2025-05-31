@@ -23,8 +23,6 @@ function ImageUploader({ onImageUpload }) {
       <label htmlFor="image-upload-input" className="upload-button">
         画像を選択
       </label>
-      <p>または、ここに画像をドラッグ＆ドロップ</p>
-      {/* TODO: ドラッグ＆ドロップ機能の実装 */}
     </div>
   );
 }

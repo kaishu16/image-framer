@@ -1,165 +1,174 @@
-// src/components/CanvasEditor.js
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import './CanvasEditor.css';
 
-const CanvasEditor = ({ userImage, frameImageSrc, initialCanvasWidth, initialCanvasHeight }) => {
+const CanvasEditor = ({
+  userImage,
+  frameImageSrc,
+  initialCanvasWidth = 800,
+  initialCanvasHeight = 800,
+}) => {
   const canvasRef = useRef(null);
-  const frameImageRef = useRef(null);
-  const [ctx, setCtx] = useState(null);
-
-  // 画像の初期パラメータを計算
-  const getInitialImageParams = (img, canvasW, canvasH) => {
-    if (!img) return { x: 0, y: 0, scale: 1, isDragging: false, lastX: 0, lastY: 0 };
-    // キャンバスにフィットするスケール
-    const scale = Math.min(
-      (canvasW - 40) / img.width,
-      (canvasH - 40) / img.height
-    );
-    // 中央に配置
-    const x = (canvasW - img.width * scale) / 2;
-    const y = (canvasH - img.height * scale) / 2;
-    return { x, y, scale, isDragging: false, lastX: 0, lastY: 0 };
-  };
-
-  const [imageParams, setImageParams] = useState({
-    x: 0, y: 0, scale: 1, isDragging: false, lastX: 0, lastY: 0,
+  const [imageParams, setImageParams] = useState({ x: 0, y: 0, scale: 1 });
+  const initialParamsRef = useRef(null);
+  const touchState = useRef({
+    dragging: false,
+    lastX: 0,
+    lastY: 0,
+    pinchStartDist: null,
+    pinchStartScale: null,
+    pinchStartCenter: null,
   });
 
-  // 画像アップロード時に初期位置・スケールを再計算
-  useEffect(() => {
-    if (!userImage) return;
+  // 画像アップロード時・リサイズ時に初期化
+  const setInitialParams = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    setImageParams(getInitialImageParams(userImage, canvas.width, canvas.height));
+    if (!canvas || !userImage) return;
+
+    // 画像の解像度を基準にcanvasのピクセルサイズを決定
+    const maxCanvasSize = 2000; // 最大2000pxまで拡大（必要に応じて調整）
+    const scaleW = userImage.width > maxCanvasSize ? maxCanvasSize / userImage.width : 1;
+    const scaleH = userImage.height > maxCanvasSize ? maxCanvasSize / userImage.height : 1;
+    const scale = Math.min(scaleW, scaleH);
+
+    const canvasW = Math.round(userImage.width * scale);
+    const canvasH = Math.round(userImage.height * scale);
+
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+
+    // 表示サイズは親要素や画面幅にフィット
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+
+    // 画像を中央＆フィット
+    const fitScale = Math.min(
+      (canvasW - 40) / userImage.width,
+      (canvasH - 40) / userImage.height
+    );
+    const x = (canvasW - userImage.width * fitScale) / 2;
+    const y = (canvasH - userImage.height * fitScale) / 2;
+    const params = { x, y, scale: fitScale };
+    initialParamsRef.current = params;
+    setImageParams(params);
+  };
+  // 画像アップロード時
+  useEffect(() => {
+    setTimeout(setInitialParams, 0);
+    // eslint-disable-next-line
   }, [userImage]);
 
-  useEffect(() => {
-    if (!frameImageSrc) return;
-    const img = new Image();
-    img.onload = () => {
-      frameImageRef.current = img;
-      drawCanvas();
-    };
-    img.src = frameImageSrc;
-  }, [frameImageSrc]);
-
+  // 描画
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext('2d');
-    setCtx(context);
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      const newWidth = Math.min(parent.clientWidth, initialCanvasWidth);
-      const newHeight = (newWidth / initialCanvasWidth) * initialCanvasHeight;
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      if (userImage) {
-        setImageParams(getInitialImageParams(userImage, newWidth, newHeight));
-      }
-      drawCanvas();
-    };
-
-    window.addEventListener('resize', handleResize);
-    handleResize();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-    // eslint-disable-next-line
-  }, [userImage, frameImageSrc, initialCanvasWidth, initialCanvasHeight]);
-
-  const drawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
+    if (!canvas || !userImage) return;
+    const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // 丸くクリッピング
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radius = Math.min(canvas.width, canvas.height) / 2 - 20;
+    const radius = Math.min(canvas.width, canvas.height) / 2 - 10;
     ctx.save();
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, false);
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.clip();
 
-    if (userImage) {
-      ctx.save();
-      ctx.translate(imageParams.x, imageParams.y);
-      ctx.scale(imageParams.scale, imageParams.scale);
-      ctx.drawImage(userImage, 0, 0, userImage.width, userImage.height);
-      ctx.restore();
-    }
+    // draw user image（高解像度で描画）
+    ctx.save();
+    ctx.translate(imageParams.x, imageParams.y);
+    ctx.scale(imageParams.scale, imageParams.scale);
+    ctx.drawImage(userImage, 0, 0, userImage.width, userImage.height);
     ctx.restore();
 
-    if (frameImageRef.current) {
-      ctx.drawImage(frameImageRef.current, 0, 0, canvas.width, canvas.height);
-    }
-  }, [ctx, userImage, imageParams, frameImageRef.current]);
+    ctx.restore();
 
-  useEffect(() => {
-    drawCanvas();
-  }, [imageParams, userImage, frameImageSrc, drawCanvas]);
-
-  // --- 以下、ドラッグ・ホイール操作のままでもOKですが、中心基準で動かすなら ---
-  const handleMouseDown = (e) => {
-    if (!userImage) return;
-    setImageParams(prev => ({
-      ...prev,
-      isDragging: true,
-      lastX: e.clientX,
-      lastY: e.clientY,
-    }));
-  };
-
-  const handleMouseMove = (e) => {
-    if (!imageParams.isDragging) return;
-    const dx = e.clientX - imageParams.lastX;
-    const dy = e.clientY - imageParams.lastY;
-    setImageParams(prev => ({
-      ...prev,
-      x: prev.x + dx,
-      y: prev.y + dy,
-      lastX: e.clientX,
-      lastY: e.clientY,
-    }));
-  };
-
-  const handleMouseUp = () => {
-    setImageParams(prev => ({ ...prev, isDragging: false }));
-  };
-
-  const handleMouseLeave = () => {
-    setImageParams(prev => ({ ...prev, isDragging: false }));
-  };
-
-  const handleWheel = (e) => {
-    if (!userImage) return;
-    e.preventDefault();
-    const scaleAmount = 0.1;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    setImageParams(prev => {
-      const newScale = e.deltaY < 0 ? prev.scale * (1 + scaleAmount) : prev.scale / (1 + scaleAmount);
-      // 拡大縮小の中心をマウス位置に
-      const offsetX = (mouseX - prev.x) / prev.scale;
-      const offsetY = (mouseY - prev.y) / prev.scale;
-      const newX = mouseX - offsetX * newScale;
-      const newY = mouseY - offsetY * newScale;
-      return {
-        ...prev,
-        scale: newScale,
-        x: newX,
-        y: newY,
+    // draw frame
+    if (frameImageSrc) {
+      const frameImg = new window.Image();
+      frameImg.onload = () => {
+        ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
       };
-    });
+      frameImg.src = frameImageSrc;
+    }
+  }, [userImage, frameImageSrc, imageParams]);
+
+  // タッチ操作
+  const handleTouchStart = (e) => {
+    if (!userImage) return;
+    if (e.touches.length === 1) {
+      touchState.current.dragging = true;
+      touchState.current.lastX = e.touches[0].clientX;
+      touchState.current.lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      touchState.current.pinchStartDist = dist;
+      touchState.current.pinchStartScale = imageParams.scale;
+      // ピンチ中心
+      touchState.current.pinchStartCenter = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+    }
+    e.preventDefault();
+  };
+
+  const handleTouchMove = (e) => {
+    if (!userImage) return;
+    if (e.touches.length === 1 && touchState.current.dragging) {
+      const dx = e.touches[0].clientX - touchState.current.lastX;
+      const dy = e.touches[0].clientY - touchState.current.lastY;
+      setImageParams(prev => ({
+        ...prev,
+        x: prev.x + dx,
+        y: prev.y + dy,
+      }));
+      touchState.current.lastX = e.touches[0].clientX;
+      touchState.current.lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2 && touchState.current.pinchStartDist && touchState.current.pinchStartScale) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scaleChange = dist / touchState.current.pinchStartDist;
+      let newScale = touchState.current.pinchStartScale * scaleChange;
+      // 下限は初期スケール
+      const minScale = initialParamsRef.current ? initialParamsRef.current.scale : 0.1;
+      newScale = Math.max(minScale, Math.min(newScale, 10));
+      // ピンチ中心
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+      setImageParams(prev => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const pinchX = center.x - rect.left;
+        const pinchY = center.y - rect.top;
+        const offsetX = (pinchX - prev.x) / prev.scale;
+        const offsetY = (pinchY - prev.y) / prev.scale;
+        const newX = pinchX - offsetX * newScale;
+        const newY = pinchY - offsetY * newScale;
+        return {
+          ...prev,
+          scale: newScale,
+          x: newX,
+          y: newY,
+        };
+      });
+    }
+    e.preventDefault();
+  };
+
+  const handleTouchEnd = () => {
+    touchState.current.dragging = false;
+    touchState.current.pinchStartDist = null;
+    touchState.current.pinchStartScale = null;
+    touchState.current.pinchStartCenter = null;
+  };
+
+  const handleReset = () => {
+    if (initialParamsRef.current) setImageParams(initialParamsRef.current);
   };
 
   const handleSaveImage = () => {
@@ -174,31 +183,20 @@ const CanvasEditor = ({ userImage, frameImageSrc, initialCanvasWidth, initialCan
     document.body.removeChild(link);
   };
 
-  const handleReset = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !userImage) return;
-    setImageParams(getInitialImageParams(userImage, canvas.width, canvas.height));
-  };
-
   return (
     <div className="canvas-editor-container">
       <canvas
         ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onWheel={handleWheel}
-        style={{ cursor: imageParams.isDragging ? 'grabbing' : 'grab' }}
-      ></canvas>
-
+        style={{ width: '100%', height: 'auto', touchAction: 'none', background: '#fff', borderRadius: '16px' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        width={initialCanvasWidth}
+        height={initialCanvasHeight}
+      />
       <div className="canvas-controls">
-        <button onClick={handleSaveImage} disabled={!userImage}>
-          画像を保存
-        </button>
-        <button onClick={handleReset} disabled={!userImage}>
-          リセット
-        </button>
+        <button onClick={handleSaveImage}>画像を保存</button>
+        <button onClick={handleReset}>リセット</button>
       </div>
     </div>
   );
