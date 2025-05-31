@@ -35,7 +35,7 @@ const CanvasEditor = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [initialCanvasSize]);
 
-  const MAX_CANVAS_SIZE = 500; // 最大800px
+  const MAX_CANVAS_SIZE = 600; // 最大800px
 
   const setInitialParams = () => {
     const canvas = canvasRef.current;
